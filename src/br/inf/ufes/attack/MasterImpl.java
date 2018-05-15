@@ -1,6 +1,11 @@
 package br.inf.ufes.attack;
 
+import java.io.Serializable;
 import java.rmi.RemoteException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -9,14 +14,18 @@ import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 import br.inf.ufes.ppd.Slave;
 
-public class MasterImpl implements Master {
+public class MasterImpl implements Master, Serializable {
 	
 	private Map<UUID, Slave> registeredSlaves;
 	private List<Guess> guesses;
 
+	public MasterImpl() {
+		registeredSlaves = new HashMap<UUID, Slave>();
+		guesses = new ArrayList<>();
+	}
+	
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
-		// TODO tratar o resto da função
 		synchronized (registeredSlaves) {
 			registeredSlaves.put(slavekey, s);
 		}
@@ -24,7 +33,6 @@ public class MasterImpl implements Master {
 
 	@Override
 	public void removeSlave(UUID slaveKey) throws RemoteException {
-		// TODO tratar o resto da função
 		synchronized (registeredSlaves) {
 			registeredSlaves.remove(slaveKey);
 		}
@@ -46,7 +54,19 @@ public class MasterImpl implements Master {
 
 	@Override
 	public Guess[] attack(byte[] ciphertext, byte[] knowntext) throws RemoteException {
-		// TODO Auto-generated method stub
+		Collection<Slave> cpy;
+		synchronized (registeredSlaves) {
+			cpy = registeredSlaves.values();
+		}
+		
+		for(Slave s: cpy) {
+			try {
+				s.startSubAttack(ciphertext, knowntext, 0, 0, 0, this);	
+			} catch (RemoteException e) {
+				
+			}
+			
+		}
 		return null;
 	}
 
