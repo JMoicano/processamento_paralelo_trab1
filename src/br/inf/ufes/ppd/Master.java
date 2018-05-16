@@ -2,7 +2,6 @@ package br.inf.ufes.ppd;
 
 
 
-
 /**
  * Master.java
  */

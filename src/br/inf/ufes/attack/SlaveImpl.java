@@ -19,8 +19,12 @@ public class SlaveImpl implements Slave, Serializable {
 
 	private Master mestre;
 	private UUID uuid;
+	private long initialindex;
+	private long finalindex;
 	
 	public SlaveImpl() {
+		this.initialindex = -1;
+		this.finalindex = -1;
 		try {
 			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
 			mestre = (Master) registry.lookup("mestre");
@@ -28,6 +32,7 @@ public class SlaveImpl implements Slave, Serializable {
 		    uuid = UUID.randomUUID();
 			
 			mestre.addSlave(this, "qualquerCoisa", uuid);
+			System.out.println("Slave uuid: " + uuid);
 		} catch (RemoteException e) {
 			System.err.println("Server exception: " + e.toString()); 
 			e.printStackTrace();
@@ -43,6 +48,22 @@ public class SlaveImpl implements Slave, Serializable {
 		
 	}
 	
+	public void setInitialIndex(long i) {
+		this.initialindex = i;
+	}
+	
+	public long getInitialIndex() {
+		return this.initialindex;
+	}
+	
+	public void setFinalIndex(long i) {
+		this.finalindex = i;
+	}
+	
+	public long getFinalIndex() {
+		return this.finalindex;
+	}
+	
 	public Master getMestre() {
 		return mestre;
 	}
@@ -55,8 +76,8 @@ public class SlaveImpl implements Slave, Serializable {
 	public void startSubAttack(byte[] ciphertext, byte[] knowntext, long initialwordindex, long finalwordindex,
 			int attackNumber, SlaveManager callbackinterface) throws RemoteException {
 		// TODO Auto-generated method stub
-		
-		callbackinterface.foundGuess(uuid, attackNumber, 0, null);
+		System.out.println("Starting new attack.");
+		//callbackinterface.foundGuess(uuid, attackNumber, 0, null);
 		
 
 	}
