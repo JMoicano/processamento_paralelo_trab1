@@ -1,8 +1,11 @@
 package br.inf.ufes.attack;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
@@ -10,6 +13,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -18,6 +22,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import javax.management.timer.TimerMBean;
 
+import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 import br.inf.ufes.ppd.Slave;
 import br.inf.ufes.ppd.SlaveManager;
@@ -28,6 +33,8 @@ public class SlaveImpl implements Slave, Serializable {
 	private UUID uuid;
 	private long initialindex;
 	private long finalindex;
+	private String[] dict;
+	private ArrayList<String> _dict;
 
 	public SlaveImpl() {
 		this.initialindex = -1;
@@ -40,8 +47,10 @@ public class SlaveImpl implements Slave, Serializable {
 
 			mestre.addSlave(this, "qualquerCoisa", uuid);
 			System.out.println("Slave uuid: " + uuid);
+			// TODO remove hard coded dict path
+			
 		} catch (RemoteException e) {
-			System.err.println("Server exception: " + e.toString()); 
+			System.err.println("1Server exception: " + e.toString()); 
 			e.printStackTrace();
 		} catch (NotBoundException e) {
 			// TODO Auto-generated catch block
@@ -51,7 +60,33 @@ public class SlaveImpl implements Slave, Serializable {
 		Timer timer = new Timer();
 		RegisterTask runn = new RegisterTask();
 		runn.setSlave(this);
-		timer.scheduleAtFixedRate(runn, 30000, 30000);
+		timer.scheduleAtFixedRate(runn, 10000, 10000);
+		
+		File f = new File("/home/rodcaldeira/git/processamento_paralelo_trab1/bin/br/inf/ufes/attack/dictionary.txt");
+		FileReader fileReader;
+		try {
+			fileReader = new FileReader(f);
+			BufferedReader b = new BufferedReader(fileReader);
+			this._dict = new ArrayList<String>();
+			String readLine = "";
+			System.out.println("Reading file using Buffered Reader");
+			while ((readLine = b.readLine()) != null) {
+				this._dict.add(readLine);
+			}
+//			for (int i = 0; i < this._dict.size(); i++) {
+//				System.out.println(i + ": " + this._dict.get(i));
+//			}
+			b.close();
+			System.out.println();
+		} catch (FileNotFoundException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
 
 	}
 
@@ -89,6 +124,7 @@ public class SlaveImpl implements Slave, Serializable {
 
 		public void run() {
 			try {
+				//System.out.println("Running... " + ++count);
 				s.getMestre().addSlave(s, "qualquerCoisa", s.getUuid());
 			} catch (RemoteException e) {
 				// TODO Auto-generated catch block
@@ -107,12 +143,14 @@ public class SlaveImpl implements Slave, Serializable {
 		this.finalindex = finalwordindex;
 		//callbackinterface.foundGuess(uuid, attackNumber, 0, null);
 
-		String[] dict; // carregar dicionario
 		
+		int aux;
 		while (this.initialindex <= this.finalindex) {
+			aux = (int) this.initialindex;
 			try {
 
-				byte[] key = knowntext;
+				String known_text = knowntext.toString();
+				byte[] key = this._dict.get(aux).getBytes();
 				SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
 
 				Cipher cipher = Cipher.getInstance("Blowfish");
@@ -122,8 +160,17 @@ public class SlaveImpl implements Slave, Serializable {
 				System.out.println("message size (bytes) = "+ message.length);
 
 				byte[] decrypted = cipher.doFinal(message);
-				//chamar mestre para avisar que achou uma possível opção
-				//mestre.foundGuess(uuid, 0, this.initialindex, dict[(int)this.initialindex].toString());
+				
+				if (decrypted.toString().contains(known_text)) {
+					Guess g = new Guess();
+					g.setKey(key.toString());
+					g.setMessage(decrypted);
+					callbackinterface.foundGuess(this.uuid, attackNumber, this.initialindex, g);
+				}
+				
+				//TODO timer para checkpoint
+				
+				
 			//	saveFile(args[0]+".msg", decrypted);
 
 			} catch (javax.crypto.BadPaddingException e) {
@@ -169,10 +216,23 @@ public class SlaveImpl implements Slave, Serializable {
 //	}
 
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException{
 		// args[0] e a chave a ser usada
 		// args[1] e o nome do arquivo de entrada
-
+//		String[] dict = null; // carregar dicionario
+//		try {
+//			File f = new File("dict.txt");
+//			BufferedReader b = new BufferedReader(new FileReader(f));
+//			String readLine = "";
+//			System.out.println("Reading file using Buffered Reader");
+//			int i = 0;
+//			while ((readLine = b.readLine()) != null) {
+//				dict[i] = readLine;
+//			}
+//		} catch (IOException e) {
+//			// TODO: handle exception
+//		}
+		
 		
 	}
 

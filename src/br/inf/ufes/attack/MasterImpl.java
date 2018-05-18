@@ -46,6 +46,7 @@ public class MasterImpl implements Master, Serializable {
 			//TODO verificar se o slavekey ja e cadastrada, e só mexer na flag
 			// possibilidade de salvar no escravo os indices que ele esta trabalhando, e sempre passar para o mestre tambem essa info
 			// nao faço ideia de como passar essa informação ¯\_(ツ)_/¯
+			System.out.println("addSlave request " + slavekey);
 			registeredSlaves.put(slavekey, new SlaveInfo(s, -1, -1, true));
 		}
 	}
