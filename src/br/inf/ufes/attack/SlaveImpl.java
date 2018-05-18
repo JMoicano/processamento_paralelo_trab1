@@ -33,8 +33,11 @@ public class SlaveImpl implements Slave, Serializable {
 	private UUID uuid;
 	private long initialindex;
 	private long finalindex;
-	private String[] dict;
 	private ArrayList<String> _dict;
+	
+	public void printDict() {
+		for(int i = 0; i < this._dict.size(); i++) System.out.println("[" + i + "] " + this._dict.get(i));
+	}
 
 	public SlaveImpl() {
 		this.initialindex = -1;
@@ -47,7 +50,6 @@ public class SlaveImpl implements Slave, Serializable {
 
 			mestre.addSlave(this, "qualquerCoisa", uuid);
 			System.out.println("Slave uuid: " + uuid);
-			// TODO remove hard coded dict path
 			
 		} catch (RemoteException e) {
 			System.err.println("1Server exception: " + e.toString()); 
@@ -62,6 +64,7 @@ public class SlaveImpl implements Slave, Serializable {
 		runn.setSlave(this);
 		timer.scheduleAtFixedRate(runn, 10000, 10000);
 		
+		// TODO remove hard coded dict path
 		File f = new File("/home/rodcaldeira/git/processamento_paralelo_trab1/bin/br/inf/ufes/attack/dictionary.txt");
 		FileReader fileReader;
 		try {

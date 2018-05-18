@@ -21,6 +21,10 @@ public class MasterImpl implements Master, Serializable {
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
 
+	//criar classe para attack info?
+	//clientinfo?
+	//na spec o mestre retorna pro client a mensagem que o client vai salvar no pc
+	
 	public class SlaveInfo {
 		Slave s; // referencia pro escravo
 		long indexNow; // pode usar como indice atual que esta - inicia com o que o mestre mandar e é atualizado nos foundguess/checkpoint/reregistro
@@ -44,10 +48,13 @@ public class MasterImpl implements Master, Serializable {
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
 			//TODO verificar se o slavekey ja e cadastrada, e só mexer na flag
-			// possibilidade de salvar no escravo os indices que ele esta trabalhando, e sempre passar para o mestre tambem essa info
-			// nao faço ideia de como passar essa informação ¯\_(ツ)_/¯
 			System.out.println("addSlave request " + slavekey);
-			registeredSlaves.put(slavekey, new SlaveInfo(s, -1, -1, true));
+			//System.out.println(s);
+			registeredSlaves.put(slavekey, 
+					new SlaveInfo(s, // slaveref
+							((SlaveImpl) s).getInitialIndex(), //initindex 
+							((SlaveImpl) s).getFinalIndex(), //finalindex
+							true)); //alive_flag
 		}
 	}
 
