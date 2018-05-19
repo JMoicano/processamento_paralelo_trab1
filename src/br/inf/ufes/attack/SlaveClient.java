@@ -1,7 +1,5 @@
 package br.inf.ufes.attack;
 
-import java.rmi.RemoteException;
-
 import br.inf.ufes.ppd.Slave;
 
 public class SlaveClient {

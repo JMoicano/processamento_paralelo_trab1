@@ -76,9 +76,6 @@ public class SlaveImpl implements Slave, Serializable {
 //			}
 			b.close();
 			System.out.println();
-		} catch (FileNotFoundException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -158,7 +155,6 @@ public class SlaveImpl implements Slave, Serializable {
 	@Override
 	public void startSubAttack(byte[] ciphertext, byte[] knowntext, long initialwordindex, long finalwordindex,
 			int attackNumber, SlaveManager callbackinterface) throws RemoteException {
-		// TODO Auto-generated method stub
 		System.out.println("Starting new attack.");
 		this.initialindex = initialwordindex;
 		this.finalindex = finalwordindex;
