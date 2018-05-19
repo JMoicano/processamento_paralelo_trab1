@@ -3,9 +3,7 @@ package br.inf.ufes.attack;
 import java.io.Serializable;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
@@ -25,17 +23,27 @@ public class MasterImpl implements Master, Serializable {
 	//clientinfo?
 	//na spec o mestre retorna pro client a mensagem que o client vai salvar no pc
 	
-	public class SlaveInfo {
-		Slave s; // referencia pro escravo
-		long indexNow; // pode usar como indice atual que esta - inicia com o que o mestre mandar e é atualizado nos foundguess/checkpoint/reregistro
-		long indexEnd; // ultimo indice a ser testado pelo escravo
-		boolean alive; // flag para verificar se o escravo esta vivo ou nao
+	private class AttackInfo{
+		long indexNow;
+		long indexEnd;
 		
-		SlaveInfo(Slave s, long start, long end, boolean flag) {
+		public AttackInfo(long indexNow, long indexEnd) {
+			this.indexNow = indexNow;
+			this.indexEnd = indexEnd;
+		}
+	}
+	
+	private class SlaveInfo {
+		Slave s; // referencia pro escravo
+		boolean alive; // flag para verificar se o escravo esta vivo ou nao
+		String name;
+		Map<Integer, AttackInfo> attacks;
+		
+		SlaveInfo(Slave s, String name) {
 			this.s = s;
-			this.indexNow = start;
-			this.indexEnd = end;
-			this.alive = flag;
+			this.name = name;
+			this.attacks = new HashMap<>();
+			this.alive = true;
 		}
 	}
 	
@@ -47,59 +55,90 @@ public class MasterImpl implements Master, Serializable {
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
-			//TODO verificar se o slavekey ja e cadastrada, e só mexer na flag
 			System.out.println("addSlave request " + slavekey);
 			//System.out.println(s);
 			registeredSlaves.put(slavekey, 
-					new SlaveInfo(s, // slaveref
-							((SlaveImpl) s).getInitialIndex(), //initindex 
-							((SlaveImpl) s).getFinalIndex(), //finalindex
-							true)); //alive_flag
+					new SlaveInfo(s, slaveName));
 		}
 	}
 
 	@Override
 	public void removeSlave(UUID slaveKey) throws RemoteException {
 		synchronized (registeredSlaves) {
-			registeredSlaves.remove(slaveKey);
+			registeredSlaves.remove(slaveKey); //TODO: gerenciar os ataques desse escravo e os indices de ataque dele
 		}
 	}
 
 	@Override
 	public void foundGuess(UUID slaveKey, int attackNumber, long currentindex, Guess currentguess)
 			throws RemoteException {
-		// TODO Auto-generated method stub
-		// ping?pong!
-		registeredSlaves.get(slaveKey).alive = true;
+		synchronized (registeredSlaves) {
+			SlaveInfo i = registeredSlaves.get(slaveKey);
+			i.alive = true;
+			i.attacks.get(attackNumber); //TODO: fazer e gerenciar uma lista dos indices usados e ja visitados	
+		}
+		
 	}
 
 	@Override
 	public void checkpoint(UUID slaveKey, int attackNumber, long currentindex) throws RemoteException {
-		// TODO Auto-generated method stub
-		// ping?pong!
-		registeredSlaves.get(slaveKey).alive = true;
-
+		synchronized (registeredSlaves) {
+			SlaveInfo i = registeredSlaves.get(slaveKey);
+			i.alive = true;
+			i.attacks.get(attackNumber); //TODO: fazer e gerenciar uma lista dos indices usados e ja visitados
+		}
 	}
 
-	@Override
-	public Guess[] attack(byte[] ciphertext, byte[] knowntext) throws RemoteException {
-		Collection<SlaveInfo> cpy;
-		synchronized (registeredSlaves) {
-			cpy = registeredSlaves.values();
+	private class CheckerTasker extends TimerTask{
+		UUID key;
+
+		public CheckerTasker(UUID key) {
+			super();
+			this.key = key;
+		}
+
+		@Override
+		public void run() {
+			if(registeredSlaves.get(key).alive) {
+				registeredSlaves.get(key).alive = false;
+			}else {
+				try {
+					synchronized (registeredSlaves) {
+						removeSlave(key);	
+					}
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 		
-		for(SlaveInfo item: cpy) {
-			try {
-				// nao sei se cria um novo slave ou se pega apenas a referencia para começar o ataque
-				SlaveImpl s = new SlaveImpl();
-				s = (SlaveImpl) item.s;
-				System.out.println("Slave " + s.getUuid() + "start attack");
-				s.startSubAttack(ciphertext, knowntext, 0, 0, 0, this);	
-			} catch (RemoteException e) {
-				
+	}
+	
+	private void requestAttack(UUID k, SlaveInfo item, byte[] ciphertext, byte[] knowntext,
+			long initialwordindex, long finalwordindex,	int attackNumber) {
+		try {
+			SlaveImpl s = (SlaveImpl) item.s;
+			System.out.println("Slave " + s.getUuid() + "start attack");
+			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
+			item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex));
+			Timer timer = new Timer();
+			timer.scheduleAtFixedRate(new CheckerTasker(k), 20000, 20000);
+		} catch (RemoteException e) {
+			synchronized (registeredSlaves) {
+				registeredSlaves.remove(k);
 			}
-			
 		}
+	}
+	
+	@Override
+	public Guess[] attack(byte[] ciphertext, byte[] knowntext) throws RemoteException {
+		HashMap<UUID, SlaveInfo> cpy;
+		synchronized (registeredSlaves) {
+			cpy = new HashMap<UUID, SlaveInfo>(registeredSlaves);
+		}
+		
+		cpy.forEach((k, s) -> requestAttack(k, s, ciphertext, knowntext, 0, 0, 0)); //TODO: gerenciar os indices e o attacknumber
+			
 		return null;
 	}
 	

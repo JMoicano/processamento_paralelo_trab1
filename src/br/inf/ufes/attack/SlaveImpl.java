@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,8 +19,6 @@ import java.util.UUID;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
-import javax.management.timer.TimerMBean;
-
 import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 import br.inf.ufes.ppd.Slave;
@@ -31,6 +28,7 @@ public class SlaveImpl implements Slave, Serializable {
 
 	private Master mestre;
 	private UUID uuid;
+	private Object currentLock;
 	private long initialindex;
 	private long finalindex;
 	private ArrayList<String> _dict;
@@ -39,13 +37,12 @@ public class SlaveImpl implements Slave, Serializable {
 		for(int i = 0; i < this._dict.size(); i++) System.out.println("[" + i + "] " + this._dict.get(i));
 	}
 
-	public SlaveImpl() {
+	public SlaveImpl(String host, String dicPath) {
 		this.initialindex = -1;
 		this.finalindex = -1;
 		try {
-			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
+			Registry registry = LocateRegistry.getRegistry(host);
 			mestre = (Master) registry.lookup("mestre");
-			if(mestre == null) System.err.println("Server ready");
 			uuid = UUID.randomUUID();
 
 			mestre.addSlave(this, "qualquerCoisa", uuid);
@@ -60,12 +57,10 @@ public class SlaveImpl implements Slave, Serializable {
 		}
 
 		Timer timer = new Timer();
-		RegisterTask runn = new RegisterTask();
-		runn.setSlave(this);
-		timer.scheduleAtFixedRate(runn, 10000, 10000);
+		timer.scheduleAtFixedRate(new RegisterTask(this), 30000, 30000);
 		
 		// TODO remove hard coded dict path
-		File f = new File("/home/rodcaldeira/git/processamento_paralelo_trab1/bin/br/inf/ufes/attack/dictionary.txt");
+		File f = new File(dicPath);
 		FileReader fileReader;
 		try {
 			fileReader = new FileReader(f);
@@ -109,26 +104,49 @@ public class SlaveImpl implements Slave, Serializable {
 		return this.finalindex;
 	}
 
-	public Master getMestre() {
-		return mestre;
-	}
-
 	public UUID getUuid() {
 		return uuid;
 	}
+	
+	private class CheckpointTask extends TimerTask{
+		SlaveImpl s;
+		int attackNumber;
+		
+		
+		
+		public CheckpointTask(SlaveImpl s, int attackNumber) {
+			super();
+			this.s = s;
+			this.attackNumber = attackNumber;
+		}
 
-	private static class RegisterTask extends TimerTask{
-		static SlaveImpl s;
-		static int count = 0;
+		public void run() {
+			long aux;
+			synchronized (s.currentLock) {
+				aux = s.initialindex;
+			}
+			try {
+				s.mestre.checkpoint(s.getUuid(), attackNumber, aux);
+			} catch (RemoteException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
 
-		public void setSlave(SlaveImpl s) {
+	private class RegisterTask extends TimerTask{
+		SlaveImpl s;
+	
+		
+		public RegisterTask(SlaveImpl s) {
+			super();
 			this.s = s;
 		}
 
 		public void run() {
 			try {
 				//System.out.println("Running... " + ++count);
-				s.getMestre().addSlave(s, "qualquerCoisa", s.getUuid());
+				s.mestre.addSlave(s, "qualquerCoisa", s.getUuid());
 			} catch (RemoteException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -146,14 +164,19 @@ public class SlaveImpl implements Slave, Serializable {
 		this.finalindex = finalwordindex;
 		//callbackinterface.foundGuess(uuid, attackNumber, 0, null);
 
+		Timer timer = new Timer();
+		timer.scheduleAtFixedRate(new CheckpointTask(this, attackNumber), 10000, 10000);
 		
-		int aux;
+		long aux;
 		while (this.initialindex <= this.finalindex) {
-			aux = (int) this.initialindex;
+			synchronized (this.currentLock) {
+				aux = this.initialindex++;				
+			}
+
 			try {
 
 				String known_text = knowntext.toString();
-				byte[] key = this._dict.get(aux).getBytes();
+				byte[] key = this._dict.get((int)aux).getBytes();
 				SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
 
 				Cipher cipher = Cipher.getInstance("Blowfish");
@@ -185,7 +208,6 @@ public class SlaveImpl implements Slave, Serializable {
 				//dont try this at home
 				e.printStackTrace();
 			}
-			this.initialindex++;
 			
 		}
 	}

@@ -12,7 +12,7 @@ public class AttackServer {
 		try {
 			Master mestre = new MasterImpl();
 			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
-			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
+			Registry registry = LocateRegistry.getRegistry(args[1]); // opcional: host
 			registry.bind("mestre", mestreref);
 		    System.err.println("Server ready");
 		} catch (Exception e) {
