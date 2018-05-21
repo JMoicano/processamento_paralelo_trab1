@@ -158,7 +158,6 @@ public class SlaveImpl implements Slave, Serializable {
 		System.out.println("Starting new attack.");
 		this.initialindex = initialwordindex;
 		this.finalindex = finalwordindex;
-		//callbackinterface.foundGuess(uuid, attackNumber, 0, null);
 
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new CheckpointTask(this, attackNumber), 10000, 10000);
@@ -189,9 +188,6 @@ public class SlaveImpl implements Slave, Serializable {
 					g.setMessage(decrypted);
 					callbackinterface.foundGuess(this.uuid, attackNumber, this.initialindex, g);
 				}
-				
-				//TODO timer para checkpoint
-				
 				
 			//	saveFile(args[0]+".msg", decrypted);
 

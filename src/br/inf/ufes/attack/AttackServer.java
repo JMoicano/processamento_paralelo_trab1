@@ -1,17 +1,15 @@
 package br.inf.ufes.attack;
 
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.UnicastRemoteObject;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Random;
 
 import br.inf.ufes.ppd.Master;
@@ -32,26 +30,34 @@ public class AttackServer {
 				Random r = new Random();
 				size = r.nextInt(99000) + 1000;
 			}
-			//TODO: implementar um gerador de entrada e salvar no arquivo
+			
+			byte[] bytes = new byte[size];
+			try {
+				SecureRandom.getInstanceStrong().nextBytes(bytes);
+			} catch (NoSuchAlgorithmException e) {
+				e.printStackTrace();
+			}
+			//TODO: Escolher uma palavra conhecida
 		}
-		byte[] criptedFile;
+		byte[] criptedFile = null;
 		try {
 			criptedFile = Files.readAllBytes(inFile.toPath());
 			
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
+		Registry registry;
+		
 		try {
-			Master mestre = new MasterImpl();
-			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
-			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
-			registry.bind("mestre", mestreref);
-		    System.err.println("Server ready");
-		} catch (Exception e) {
-			System.err.println("Server exception: " + e.toString()); 
+			registry = LocateRegistry.getRegistry("127.0.0.1");
+			Master mestre = (Master) registry.lookup("mestre");
+			mestre.attack(criptedFile, knownWord.getBytes());
+		} catch (RemoteException | NotBoundException e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		//TODO: fazer o ataque
+
+		
 	}
 
 }

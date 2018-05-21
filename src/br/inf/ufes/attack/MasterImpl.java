@@ -1,7 +1,14 @@
 package br.inf.ufes.attack;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -9,6 +16,8 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
+
+import javax.swing.plaf.FileChooserUI;
 
 import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
@@ -72,11 +81,19 @@ public class MasterImpl implements Master, Serializable {
 	@Override
 	public void foundGuess(UUID slaveKey, int attackNumber, long currentindex, Guess currentguess)
 			throws RemoteException {
+		SlaveInfo i;
 		synchronized (registeredSlaves) {
-			SlaveInfo i = registeredSlaves.get(slaveKey);
-			i.alive = true;
-			i.attacks.get(attackNumber); //TODO: fazer e gerenciar uma lista dos indices usados e ja visitados	
+			i = registeredSlaves.get(slaveKey);
 		}
+		i.alive = true;
+		i.attacks.get(attackNumber); //TODO: fazer e gerenciar uma lista dos indices usados e ja visitados
+		try (FileOutputStream fos = new FileOutputStream(currentguess.getKey() + ".msg")) {
+		   fos.write(currentguess.getMessage());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 		
 	}
 
@@ -140,6 +157,19 @@ public class MasterImpl implements Master, Serializable {
 		cpy.forEach((k, s) -> requestAttack(k, s, ciphertext, knowntext, 0, 0, 0)); //TODO: gerenciar os indices e o attacknumber
 			
 		return null;
+	}
+	
+	public void main(String args[]) {
+		try {
+			Master mestre = new MasterImpl();
+			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
+			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
+			registry.bind("mestre", mestreref);
+		    System.err.println("Server ready");
+		} catch (Exception e) {
+			System.err.println("Server exception: " + e.toString()); 
+			e.printStackTrace();
+		}
 	}
 	
 	//TODO main
