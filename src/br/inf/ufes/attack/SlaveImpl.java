@@ -37,7 +37,7 @@ public class SlaveImpl implements Slave, Serializable {
 		for(int i = 0; i < this._dict.size(); i++) System.out.println("[" + i + "] " + this._dict.get(i));
 	}
 
-	public SlaveImpl(String host, String dicPath) {
+	public SlaveImpl(String host, String dicPath, String name) {
 		this.initialindex = -1;
 		this.finalindex = -1;
 		try {
@@ -45,7 +45,7 @@ public class SlaveImpl implements Slave, Serializable {
 			mestre = (Master) registry.lookup("mestre");
 			uuid = UUID.randomUUID();
 
-			mestre.addSlave(this, "qualquerCoisa", uuid);
+			mestre.addSlave(this, name, uuid);
 			System.out.println("Slave uuid: " + uuid);
 			
 		} catch (RemoteException e) {
@@ -193,19 +193,15 @@ public class SlaveImpl implements Slave, Serializable {
 					callbackinterface.foundGuess(this.uuid, attackNumber, this.initialindex, g);
 				}
 				
-			//	saveFile(args[0]+".msg", decrypted);
-
 			} catch (javax.crypto.BadPaddingException e) {
-				// essa excecao e jogada quando a senha esta incorreta
-				// porem nao quer dizer que a senha esta correta se nao jogar essa excecao
 				System.out.println("Senha invalida.");
 
 			} catch (Exception e) {
-				//dont try this at home
 				e.printStackTrace();
 			}
 			
 		}
+		mestre.checkpoint(uuid, attackNumber, initialindex);
 	}
 			
 
@@ -227,34 +223,12 @@ public class SlaveImpl implements Slave, Serializable {
 		is.close();
 		return data;
 	}
-// Slave não tem que salvar para arquivo a solucao, so retornar a chave se correta
-//	private static void saveFile(String filename, byte[] data) throws IOException {
-//
-//		FileOutputStream out = new FileOutputStream(filename);
-//		out.write(data);
-//		out.close();
-//
-//	}
 
 
-	public static void main(String[] args) throws IOException{
-		// args[0] e a chave a ser usada
-		// args[1] e o nome do arquivo de entrada
-//		String[] dict = null; // carregar dicionario
-//		try {
-//			File f = new File("dict.txt");
-//			BufferedReader b = new BufferedReader(new FileReader(f));
-//			String readLine = "";
-//			System.out.println("Reading file using Buffered Reader");
-//			int i = 0;
-//			while ((readLine = b.readLine()) != null) {
-//				dict[i] = readLine;
-//			}
-//		} catch (IOException e) {
-//			// TODO: handle exception
-//		}
+	public static void main(String[] args) {
 		
-		
+		Slave s = new SlaveImpl(args[0], args[1], args[2]);
+
 	}
 
 }

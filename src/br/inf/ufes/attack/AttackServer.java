@@ -16,6 +16,7 @@ import java.util.Random;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
+import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 
 public class AttackServer {
@@ -64,8 +65,11 @@ public class AttackServer {
 			registry = LocateRegistry.getRegistry("127.0.0.1");
 			Master mestre = (Master) registry.lookup("mestre");
 			
-			mestre.attack(criptedFile, knownWord.getBytes());
-		} catch (RemoteException | NotBoundException e) {
+			Guess[] guesses = mestre.attack(criptedFile, knownWord.getBytes());
+			for(Guess g : guesses) {
+				saveFile(g.getKey() + ".msg", g.getMessage());
+			}
+		} catch (NotBoundException | IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
