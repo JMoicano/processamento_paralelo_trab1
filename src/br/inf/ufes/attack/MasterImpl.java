@@ -24,14 +24,10 @@ public class MasterImpl implements Master, Serializable {
 	
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
-	private int dict_size;
+	private static final int dict_size = 80368;
 	private int penddingSubAttackNum;
 	private int currentAttack;
 	
-	public void setDictSize(int v) {
-		this.dict_size = v;
-	}
-
 	//criar classe para attack info?
 	//clientinfo?
 	//na spec o mestre retorna pro client a mensagem que o client vai salvar no pc
@@ -70,15 +66,10 @@ public class MasterImpl implements Master, Serializable {
 		registeredSlaves = new HashMap<UUID, SlaveInfo>();
 		guesses = new ArrayList<>();
 		currentAttack = 0;
-		dict_size = -1;
 	}
 	
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
-		if (dict_size == -1) {
-			SlaveImpl tmp = (SlaveImpl) s;
-			this.setDictSize(tmp.sizeDict());
-		}
 		synchronized (registeredSlaves) {
 			System.out.println("addSlave request " + slavekey);
 			//System.out.println(s);

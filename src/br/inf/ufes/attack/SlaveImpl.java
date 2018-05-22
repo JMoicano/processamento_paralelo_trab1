@@ -40,6 +40,31 @@ public class SlaveImpl implements Slave, Serializable {
 	public SlaveImpl(String host, String dicPath, String name) {
 		this.initialindex = -1;
 		this.finalindex = -1;
+		
+
+		File f = new File(dicPath);
+		FileReader fileReader;
+		try {
+			fileReader = new FileReader(f);
+			BufferedReader b = new BufferedReader(fileReader);
+			this._dict = new ArrayList<String>();
+			String readLine = "";
+			System.out.println("Reading file using Buffered Reader");
+			while ((readLine = b.readLine()) != null) {
+				this._dict.add(readLine);
+			}
+			System.out.println("dicSize: " + _dict.size());
+//			for (int i = 0; i < this._dict.size(); i++) {
+//				System.out.println(i + ": " + this._dict.get(i));
+//			}
+			b.close();
+			System.out.println();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		
 		try {
 			Registry registry = LocateRegistry.getRegistry(host);
 			mestre = (Master) registry.lookup("mestre");
@@ -58,29 +83,7 @@ public class SlaveImpl implements Slave, Serializable {
 
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new RegisterTask(this), 30000, 30000);
-		
-		// TODO remove hard coded dict path
-		File f = new File(dicPath);
-		FileReader fileReader;
-		try {
-			fileReader = new FileReader(f);
-			BufferedReader b = new BufferedReader(fileReader);
-			this._dict = new ArrayList<String>();
-			String readLine = "";
-			System.out.println("Reading file using Buffered Reader");
-			while ((readLine = b.readLine()) != null) {
-				this._dict.add(readLine);
-			}
-//			for (int i = 0; i < this._dict.size(); i++) {
-//				System.out.println(i + ": " + this._dict.get(i));
-//			}
-			b.close();
-			System.out.println();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
+				
 		
 
 	}
