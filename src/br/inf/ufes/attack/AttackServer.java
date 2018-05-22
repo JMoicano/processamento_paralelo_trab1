@@ -37,7 +37,8 @@ public class AttackServer {
 			} catch (NoSuchAlgorithmException e) {
 				e.printStackTrace();
 			}
-			//TODO: Escolher uma palavra conhecida
+			knownWord = bytes.toString().substring(0, 5);
+			
 		}
 		byte[] criptedFile = null;
 		try {
@@ -51,6 +52,7 @@ public class AttackServer {
 		try {
 			registry = LocateRegistry.getRegistry("127.0.0.1");
 			Master mestre = (Master) registry.lookup("mestre");
+			
 			mestre.attack(criptedFile, knownWord.getBytes());
 		} catch (RemoteException | NotBoundException e) {
 			// TODO Auto-generated catch block

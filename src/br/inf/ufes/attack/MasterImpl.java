@@ -27,6 +27,11 @@ public class MasterImpl implements Master, Serializable {
 	
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
+	private int dict_size;
+	
+	public void setDictSize(int v) {
+		this.dict_size = v;
+	}
 
 	//criar classe para attack info?
 	//clientinfo?
@@ -59,10 +64,15 @@ public class MasterImpl implements Master, Serializable {
 	public MasterImpl() {
 		registeredSlaves = new HashMap<UUID, SlaveInfo>();
 		guesses = new ArrayList<>();
+		dict_size = -1;
 	}
 	
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
+		if (dict_size == -1) {
+			SlaveImpl tmp = (SlaveImpl) s;
+			this.setDictSize(tmp.sizeDict());
+		}
 		synchronized (registeredSlaves) {
 			System.out.println("addSlave request " + slavekey);
 			//System.out.println(s);
@@ -149,17 +159,26 @@ public class MasterImpl implements Master, Serializable {
 	
 	@Override
 	public Guess[] attack(byte[] ciphertext, byte[] knowntext) throws RemoteException {
-		HashMap<UUID, SlaveInfo> cpy;
+		//HashMap<UUID, SlaveInfo> cpy;
+		ArrayList<SlaveInfo> cpy;
 		synchronized (registeredSlaves) {
-			cpy = new HashMap<UUID, SlaveInfo>(registeredSlaves);
+			//cpy = new HashMap<UUID, SlaveInfo>(registeredSlaves);
+			cpy = new ArrayList<SlaveInfo>(registeredSlaves.values());
 		}
 		
-		cpy.forEach((k, s) -> requestAttack(k, s, ciphertext, knowntext, 0, 0, 0)); //TODO: gerenciar os indices e o attacknumber
+		int index_size = this.dict_size/cpy.size();
+		int count = 1;
+		
+		for (SlaveInfo s : cpy) {
+			SlaveImpl tmp = (SlaveImpl) s.s;
 			
+			requestAttack(tmp.getUuid(), s, ciphertext, knowntext, index_size*(count-1), index_size*count, 0);
+			count++;
+		}
 		return null;
 	}
 	
-	public void main(String args[]) {
+	public static void main(String args[]) {
 		try {
 			Master mestre = new MasterImpl();
 			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
@@ -170,34 +189,5 @@ public class MasterImpl implements Master, Serializable {
 			System.err.println("Server exception: " + e.toString()); 
 			e.printStackTrace();
 		}
-	}
-	
-	//TODO main
-	/*
-	 * main fica passivo esperando o client pedir o ataque
-	 * divide o numero de palavras no dict pelo total de escravo
-	 * loop para fazer chamada para os escravos
-	 * pode fazer um método diferente, podemos usar o mesmo metodo para quando um escravo morrer e fazer a redistribuição do trabalho 
-	 * entre os escravos
-	 * 
-	 * 
-	 * enquanto passivo esperando o attack ele tem que verificar o hashmap para verificar quem não está vivo
-	 * 
-	 * esse loop tem que rodar de 20 em 20 sec - nao conseguir implementar os bagulhos de timer, por conta de sync/static method 
-	 * e os carai que eu me perco
-	 * for (SlaveInfo slave: registeredSlaves) {
-	 * 	if (!slave.alive) {
-	 * 		//alive == false entao remove o slave
-	 * 		//pega as informações dos indices que o escravo estava trabalhando
-	 * 		//verificar se o checkpoint/foundguess é diff de -1 e pode retornar só ele e o 
-	 * 	} else {
-	 * 		//seta alive para falso, o slave tem que se re-registrar e isso torna a flag para true
-	 *		//os metodos checkpoint e foundguess tambem tornam a flag para true 
-	 *  }
-	 * }
-	 * 
-	 * 
-	 * 
-	 * */
-	
+	}	
 }

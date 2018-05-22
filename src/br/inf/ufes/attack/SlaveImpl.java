@@ -100,6 +100,10 @@ public class SlaveImpl implements Slave, Serializable {
 	public long getFinalIndex() {
 		return this.finalindex;
 	}
+	
+	public int sizeDict() {
+		return this._dict.size();
+	}
 
 	public UUID getUuid() {
 		return uuid;
