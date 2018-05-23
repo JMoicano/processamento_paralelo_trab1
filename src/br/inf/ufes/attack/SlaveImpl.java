@@ -12,6 +12,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.RemoteObject;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -28,61 +29,38 @@ public class SlaveImpl implements Slave, Serializable {
 
 	private Master mestre;
 	private UUID uuid;
-	private Object currentLock;
 	private long initialindex;
 	private long finalindex;
 	private ArrayList<String> _dict;
+	private String hostname;
+	private String name;
 	
 	public void printDict() {
 		for(int i = 0; i < this._dict.size(); i++) System.out.println("[" + i + "] " + this._dict.get(i));
 	}
 
 	public SlaveImpl(String host, String dicPath, String name) {
+		this.hostname = host;
+		this.name = name;
+		uuid = UUID.randomUUID();
 		this.initialindex = -1;
 		this.finalindex = -1;
-		
 
 		File f = new File(dicPath);
-		FileReader fileReader;
-		try {
-			fileReader = new FileReader(f);
-			BufferedReader b = new BufferedReader(fileReader);
+		 
+		try(FileReader fileReader = new FileReader(f);
+			BufferedReader b = new BufferedReader(fileReader)) {
 			this._dict = new ArrayList<String>();
 			String readLine = "";
-			System.out.println("Reading file using Buffered Reader");
 			while ((readLine = b.readLine()) != null) {
 				this._dict.add(readLine);
 			}
-			System.out.println("dicSize: " + _dict.size());
-//			for (int i = 0; i < this._dict.size(); i++) {
-//				System.out.println(i + ": " + this._dict.get(i));
-//			}
-			b.close();
-			System.out.println();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		
-		try {
-			Registry registry = LocateRegistry.getRegistry(host);
-			mestre = (Master) registry.lookup("mestre");
-			uuid = UUID.randomUUID();
-
-			mestre.addSlave(this, name, uuid);
-			System.out.println("Slave uuid: " + uuid);
-			
-		} catch (RemoteException e) {
-			System.err.println("1Server exception: " + e.toString()); 
-			e.printStackTrace();
-		} catch (NotBoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
 		Timer timer = new Timer();
-		timer.scheduleAtFixedRate(new RegisterTask(this), 30000, 30000);
+		timer.scheduleAtFixedRate(new RegisterTask(this), 0, 30000);
 				
 		
 
@@ -125,12 +103,8 @@ public class SlaveImpl implements Slave, Serializable {
 		}
 
 		public void run() {
-			long aux;
-			synchronized (s.currentLock) {
-				aux = s.initialindex;
-			}
 			try {
-				s.mestre.checkpoint(s.getUuid(), attackNumber, aux);
+				s.mestre.checkpoint(s.getUuid(), attackNumber, s.initialindex);
 			} catch (RemoteException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -149,11 +123,14 @@ public class SlaveImpl implements Slave, Serializable {
 
 		public void run() {
 			try {
-				//System.out.println("Running... " + ++count);
-				s.mestre.addSlave(s, "qualquerCoisa", s.getUuid());
-			} catch (RemoteException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				Registry registry = LocateRegistry.getRegistry(hostname);
+				mestre = (Master) registry.lookup("mestre");
+
+				mestre.addSlave(s, name, uuid);
+				System.out.println("Slave uuid: " + uuid);
+				
+			} catch (RemoteException | NotBoundException e) {
+				System.out.println("Mestre nao encontrado");
 			}
 		}
 
@@ -162,7 +139,7 @@ public class SlaveImpl implements Slave, Serializable {
 	@Override
 	public void startSubAttack(byte[] ciphertext, byte[] knowntext, long initialwordindex, long finalwordindex,
 			int attackNumber, SlaveManager callbackinterface) throws RemoteException {
-		System.out.println("Starting new attack.");
+		try {
 		this.initialindex = initialwordindex;
 		this.finalindex = finalwordindex;
 
@@ -171,40 +148,39 @@ public class SlaveImpl implements Slave, Serializable {
 		
 		long aux;
 		while (this.initialindex <= this.finalindex) {
-			synchronized (this.currentLock) {
-				aux = this.initialindex++;				
-			}
+			aux = this.initialindex++;				
 
+		
+			String known_text = new String(knowntext).toString();
+			System.out.println(known_text);
+			byte[] key = this._dict.get((int)aux).getBytes();
+			System.out.println(_dict.get((int)aux));
 			try {
-
-				String known_text = knowntext.toString();
-				byte[] key = this._dict.get((int)aux).getBytes();
 				SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
-
+	
 				Cipher cipher = Cipher.getInstance("Blowfish");
 				cipher.init(Cipher.DECRYPT_MODE, keySpec);
-
+	
 				byte[] message = ciphertext;
-				System.out.println("message size (bytes) = "+ message.length);
-
+	
 				byte[] decrypted = cipher.doFinal(message);
-				
-				if (decrypted.toString().contains(known_text)) {
+				String decryptedStr = new String(decrypted);
+				System.out.println();
+				if (decryptedStr.contains(known_text)) {
 					Guess g = new Guess();
-					g.setKey(key.toString());
+					g.setKey(new String(key));
 					g.setMessage(decrypted);
 					callbackinterface.foundGuess(this.uuid, attackNumber, this.initialindex, g);
 				}
-				
-			} catch (javax.crypto.BadPaddingException e) {
-				System.out.println("Senha invalida.");
-
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+			} catch (javax.crypto.BadPaddingException e) { }
+			
 			
 		}
 		mestre.checkpoint(uuid, attackNumber, initialindex);
+		timer.cancel();
+		}catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 			
 

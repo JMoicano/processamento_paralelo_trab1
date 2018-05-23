@@ -27,6 +27,7 @@ public class MasterImpl implements Master, Serializable {
 	private static final int dict_size = 80368;
 	private int penddingSubAttackNum;
 	private int currentAttack;
+	private Object waiter;
 	
 	//criar classe para attack info?
 	//clientinfo?
@@ -35,16 +36,18 @@ public class MasterImpl implements Master, Serializable {
 	private class AttackInfo{
 		long indexNow;
 		long indexEnd;
-		int attackNumber;
+//		int attackNumber;
 		byte[] cypherText;
 		byte[] knownWord;
+		Timer timer;
 		
-		public AttackInfo(long indexNow, long indexEnd, int attackNumber, byte[] cypherText, byte[] knownWord) {
+		public AttackInfo(long indexNow, long indexEnd, int attackNumber, byte[] cypherText, byte[] knownWord, Timer timer) {
 			this.indexNow = indexNow;
 			this.indexEnd = indexEnd;
 			this.cypherText = cypherText;
 			this.knownWord = knownWord;
-			this.attackNumber = attackNumber;
+//			this.attackNumber = attackNumber;
+			this.timer = timer;
 		}
 	}
 	
@@ -52,12 +55,14 @@ public class MasterImpl implements Master, Serializable {
 		Slave s; 		// referencia pro escravo
 		boolean alive; // flag para verificar se o escravo esta vivo ou nao
 		String name;
-		List<AttackInfo> attacks;
+		Map<Integer, AttackInfo> attacks;
+		UUID uuid;
 		
-		SlaveInfo(Slave s, String name) {
+		SlaveInfo(Slave s, String name, UUID uuid) {
 			this.s = s;
 			this.name = name;
-			this.attacks = new ArrayList<>();
+			this.uuid = uuid;
+			this.attacks = new HashMap<>();
 			this.alive = true;
 		}
 	}
@@ -65,16 +70,17 @@ public class MasterImpl implements Master, Serializable {
 	public MasterImpl() {
 		registeredSlaves = new HashMap<UUID, SlaveInfo>();
 		guesses = new ArrayList<>();
+		waiter = new Object();
 		currentAttack = 0;
 	}
 	
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
-			System.out.println("addSlave request " + slavekey);
+			System.out.println("addSlave request " + slaveName);
 			//System.out.println(s);
 			registeredSlaves.put(slavekey, 
-					new SlaveInfo(s, slaveName));
+					new SlaveInfo(s, slaveName,slavekey));
 		}
 	}
 
@@ -82,10 +88,11 @@ public class MasterImpl implements Master, Serializable {
 	public void removeSlave(UUID slaveKey) throws RemoteException {
 		synchronized (registeredSlaves) {
 			SlaveInfo toBe = registeredSlaves.remove(slaveKey);
+			System.out.println("removeSlave " + slaveKey);
 			Random generator = new Random();
 			SlaveInfo[] values = (SlaveInfo[]) registeredSlaves.values().toArray();
 			SlaveInfo randomSlave = values[generator.nextInt(values.length)];
-			toBe.attacks.forEach((i)-> requestAttack(randomSlave, i.cypherText, i.knownWord, i.indexNow, i.indexEnd, i.attackNumber));
+			toBe.attacks.forEach((a, i)-> requestAttack(randomSlave, i.cypherText, i.knownWord, i.indexNow, i.indexEnd, a));
 			penddingSubAttackNum--;
 		}
 	}
@@ -94,20 +101,13 @@ public class MasterImpl implements Master, Serializable {
 	public void foundGuess(UUID slaveKey, int attackNumber, long currentindex, Guess currentguess)
 			throws RemoteException {
 		SlaveInfo i;
+		
+
 		synchronized (registeredSlaves) {
 			i = registeredSlaves.get(slaveKey);
 		}
-		i.alive = true;
-		i.attacks.get(attackNumber); //TODO: fazer e gerenciar uma lista dos indices usados e ja visitados
-		System.out.println("Escravo: " + i.name + " | Indice Atual: " + currentindex + " | " + currentguess.getMessage());
-		try (FileOutputStream fos = new FileOutputStream(currentguess.getKey() + ".msg")) {
-		   fos.write(currentguess.getMessage());
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		
+		System.out.println("Escravo: " + i.name + " | Indice Atual: " + currentindex + " | " + new String(currentguess.getKey()));
+		checkpoint(slaveKey, attackNumber, currentindex);		
 	}
 
 	@Override
@@ -117,10 +117,11 @@ public class MasterImpl implements Master, Serializable {
 			i.alive = true;
 			AttackInfo ai = i.attacks.get(attackNumber);
 			ai.indexNow = currentindex;
-			if(ai.indexEnd == currentindex) {
-				penddingSubAttackNum--;
+			if(!(ai.indexEnd > currentindex)) {
+				ai.timer.cancel();
+				--penddingSubAttackNum;
 				if(!(penddingSubAttackNum > 0)) {
-					this.notify();
+					waiter.notify();						
 				}
 			}
 		}
@@ -155,14 +156,14 @@ public class MasterImpl implements Master, Serializable {
 			long initialwordindex, long finalwordindex,	int attackNumber) {
 		UUID k = null;
 		try {
-			SlaveImpl s = (SlaveImpl) item.s;
-			k = s.getUuid();
-			System.out.println("Slave " + s.getUuid() + "start attack");
-			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
-			item.attacks.add(attackNumber, new AttackInfo(initialwordindex, finalwordindex, attackNumber, ciphertext, knowntext));
+			Slave s = item.s;
+			k = item.uuid;
+			System.out.println("Slave " + k + "start attack");
 			Timer timer = new Timer();
+			item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, attackNumber, ciphertext, knowntext, timer));
 			timer.scheduleAtFixedRate(new CheckerTasker(k), 20000, 20000);
 			penddingSubAttackNum++;
+			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
 		} catch (RemoteException e) {
 			synchronized (registeredSlaves) {
 				registeredSlaves.remove(k);
@@ -180,14 +181,18 @@ public class MasterImpl implements Master, Serializable {
 		
 		penddingSubAttackNum = 0;
 		int index_size = this.dict_size/cpy.size();
-		int count = 1;
+		System.out.println("size: " +index_size);
+		int count = 0;
 		int attackNumber = currentAttack++;
 		for (SlaveInfo s : cpy) {
-			requestAttack(s, ciphertext, knowntext, index_size*(count-1), index_size*count - 1, attackNumber);
+			requestAttack(s, ciphertext, knowntext, index_size*count, index_size*(count+1) - 1, attackNumber);
 			count++;
 		}
 		try {
-			wait();
+			synchronized (waiter) {
+				waiter.wait();				
+			}
+
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -200,7 +205,7 @@ public class MasterImpl implements Master, Serializable {
 			Master mestre = new MasterImpl();
 			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
 			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
-			registry.bind("mestre", mestreref);
+			registry.rebind("mestre", mestreref);
 		    System.err.println("Server ready");
 		} catch (Exception e) {
 			System.err.println("Server exception: " + e.toString()); 

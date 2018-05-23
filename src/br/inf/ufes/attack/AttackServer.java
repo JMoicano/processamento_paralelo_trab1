@@ -1,6 +1,7 @@
 package br.inf.ufes.attack;
 
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -21,11 +22,11 @@ import br.inf.ufes.ppd.Master;
 
 public class AttackServer {
 	public static void main(String args[]) {
-		String inFilePath = args[1];
-		String knownWord = args[2];
+		String inFilePath = args[0];
+		String knownWord = args[1];
 		int size = 0;
-		if(args.length == 4) {
-			size = Integer.parseInt(args[3]);
+		if(args.length == 3) {
+			size = Integer.parseInt(args[2]);
 		}
 		
 		File inFile = new File(inFilePath);
@@ -35,18 +36,25 @@ public class AttackServer {
 		if(!inFile.exists()) {
 			if(size == 0) {
 				Random r = new Random();
-				size = r.nextInt(99000) + 1000;
+				size = r.nextInt(99000) + 1000 - knownWord.length();
 			}
 			
 			bytes = new byte[size];
-			try {
-				SecureRandom.getInstanceStrong().nextBytes(bytes);
-				knownWord = bytes.toString().substring(0, 5);
-				saveFile(knownWord + ".ori", bytes);
+			try (FileOutputStream fos = new FileOutputStream(inFile)){
+				new Random().nextBytes(bytes);
+				ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
+				for(byte b : knownWord.getBytes()) {
+					System.out.println(b);
+				}
+				outputStream.write(knownWord.getBytes());
+				outputStream.write(bytes);
+				System.out.println(knownWord.getBytes());
+				
+				bytes = outputStream.toByteArray();
+				System.out.println(bytes);
+				saveFile("./madman" + ".ori", bytes);
 				criptedFile = encryptMsg("madman", bytes);
-				saveFile("encryptFile.cipher", criptedFile);
-			} catch (NoSuchAlgorithmException e) {
-				e.printStackTrace();
+				fos.write(criptedFile);
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();	
@@ -62,7 +70,7 @@ public class AttackServer {
 		Registry registry;
 		
 		try {
-			registry = LocateRegistry.getRegistry("127.0.0.1");
+			registry = LocateRegistry.getRegistry();
 			Master mestre = (Master) registry.lookup("mestre");
 			
 			Guess[] guesses = mestre.attack(criptedFile, knownWord.getBytes());
