@@ -24,19 +24,14 @@ public class MasterImpl implements Master, Serializable {
 	
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
-	private static final int dict_size = 80368;
+	private static final int dict_size = 1;//80368;
 	private int penddingSubAttackNum;
 	private int currentAttack;
 	private Object waiter;
 	
-	//criar classe para attack info?
-	//clientinfo?
-	//na spec o mestre retorna pro client a mensagem que o client vai salvar no pc
-	
 	private class AttackInfo{
 		long indexNow;
 		long indexEnd;
-//		int attackNumber;
 		byte[] cypherText;
 		byte[] knownWord;
 		Timer timer;
@@ -46,7 +41,6 @@ public class MasterImpl implements Master, Serializable {
 			this.indexEnd = indexEnd;
 			this.cypherText = cypherText;
 			this.knownWord = knownWord;
-//			this.attackNumber = attackNumber;
 			this.timer = timer;
 		}
 	}
@@ -106,6 +100,9 @@ public class MasterImpl implements Master, Serializable {
 		synchronized (registeredSlaves) {
 			i = registeredSlaves.get(slaveKey);
 		}
+		synchronized (guesses) {
+			guesses.add(currentguess);
+		}
 		System.out.println("Escravo: " + i.name + " | Indice Atual: " + currentindex + " | " + new String(currentguess.getKey()));
 		checkpoint(slaveKey, attackNumber, currentindex);		
 	}
@@ -120,9 +117,6 @@ public class MasterImpl implements Master, Serializable {
 			if(!(ai.indexEnd > currentindex)) {
 				ai.timer.cancel();
 				--penddingSubAttackNum;
-				if(!(penddingSubAttackNum > 0)) {
-					waiter.notify();						
-				}
 			}
 		}
 	}
@@ -188,16 +182,10 @@ public class MasterImpl implements Master, Serializable {
 			requestAttack(s, ciphertext, knowntext, index_size*count, index_size*(count+1) - 1, attackNumber);
 			count++;
 		}
-		try {
-			synchronized (waiter) {
-				waiter.wait();				
-			}
 
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return (Guess[]) guesses.toArray();
+		while(penddingSubAttackNum > 0);
+
+		return guesses.toArray(new Guess[0]);
 	}
 	
 	public static void main(String args[]) {
