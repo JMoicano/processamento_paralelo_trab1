@@ -25,7 +25,7 @@ public class MasterImpl implements Master, Serializable {
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
 	private static final int dict_size = 80368;
-	private int penddingSubAttackNum;
+	private Integer penddingSubAttackNum;
 	private int currentAttack;
 	private Object waiter;
 	
@@ -72,8 +72,10 @@ public class MasterImpl implements Master, Serializable {
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
 			System.out.println("Slave " + slaveName + " added");
-			registeredSlaves.put(slavekey, 
-					new SlaveInfo(s, slaveName,slavekey));
+			if(!registeredSlaves.containsKey(slavekey)) {
+				registeredSlaves.put(slavekey, 
+						new SlaveInfo(s, slaveName,slavekey));
+			}
 		}
 	}
 
@@ -121,16 +123,12 @@ public class MasterImpl implements Master, Serializable {
 		i.alive = true;
 
 		ai = i.attacks.get(attackNumber);
-		if(ai != null) {
-			ai.indexNow = currentindex;
-	
-			if(!(currentindex < ai.indexEnd)) {
-				--penddingSubAttackNum;
-				ai.timer.cancel();
-				
-			}
-		}else {
-			--penddingSubAttackNum;
+		ai.indexNow = currentindex;
+
+		if(!(currentindex < ai.indexEnd)) {
+			System.out.println(--penddingSubAttackNum + " Attacks remaning");
+			ai.timer.cancel();
+			
 		}
 		if(penddingSubAttackNum <= 0) {
 			synchronized (waiter) {
@@ -167,22 +165,23 @@ public class MasterImpl implements Master, Serializable {
 	}
 	
 	private void requestAttack(SlaveInfo item, byte[] ciphertext, byte[] knowntext,
-			long initialwordindex, long finalwordindex,	int attackNumber) {
+			long initialwordindex, long finalwordindex,	int attackNumber) throws RemoteException {
 		UUID k = null;
-		try {
+		
 			Slave s = item.s;
 			k = item.uuid;
 			System.out.println("Slave " + item.name + " started Attack #" + attackNumber);
 			Timer timer = new Timer();
 			synchronized (item.attacks) {
-				item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, ciphertext, knowntext, timer));				
+				item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, ciphertext, knowntext, timer));
 			}
 			timer.scheduleAtFixedRate(new CheckerTasker(k), 20000, 20000);
 			penddingSubAttackNum++;
+		try {
 			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
 		} catch (RemoteException e) {
 			synchronized (registeredSlaves) {
-				registeredSlaves.remove(k);
+				removeSlave(k);
 			}
 		}
 	}
@@ -219,8 +218,8 @@ public class MasterImpl implements Master, Serializable {
 	public static void main(String args[]) {
 		try {
 			Master mestre = new MasterImpl();
-			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
-			Registry registry = LocateRegistry.getRegistry(); // opcional: host
+			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 0);
+			Registry registry = LocateRegistry.getRegistry(args[0]); // opcional: host
 			registry.rebind("mestre", mestreref);
 		    System.err.println("Master online");
 		} catch (Exception e) {
