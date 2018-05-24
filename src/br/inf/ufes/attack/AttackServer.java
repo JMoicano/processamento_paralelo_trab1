@@ -1,9 +1,11 @@
 package br.inf.ufes.attack;
 
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.rmi.NotBoundException;
@@ -12,6 +14,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Random;
 
 import javax.crypto.Cipher;
@@ -23,16 +26,33 @@ import br.inf.ufes.ppd.Master;
 public class AttackServer {
 	public static void main(String args[]) {
 		String host = args[0];
-		String inFilePath = args[1];
-		String knownWord = args[2];
+		String dicPath = args[1];
+		String inFilePath = args[2];
+		String knownWord = args[3];
+		ArrayList<String> _dict;
+		String cryptKey = null;
 		int size = 0;
-		if(args.length == 4) {
-			size = Integer.parseInt(args[3]);
-		}
-		
+		if(args.length == 5) {
+			size = Integer.parseInt(args[4]);
+		} 
+			
 		File inFile = new File(inFilePath);
 		byte[] bytes;
 
+		File f = new File(dicPath);
+		 
+		try(FileReader fileReader = new FileReader(f);
+			BufferedReader b = new BufferedReader(fileReader)) {
+			_dict = new ArrayList<String>();
+			String readLine = "";
+			while ((readLine = b.readLine()) != null) {
+				_dict.add(readLine);
+			}
+			cryptKey = _dict.get(new Random().nextInt(_dict.size()));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 		byte[] criptedFile = null;
 		if(!inFile.exists()) {
 			if(size == 0) {
@@ -53,8 +73,9 @@ public class AttackServer {
 				
 				bytes = outputStream.toByteArray();
 				System.out.println(bytes);
-				saveFile("./madman" + ".ori", bytes);
-				criptedFile = encryptMsg("madman", bytes);
+				if (cryptKey == null) cryptKey = "madman";
+				saveFile("./" + cryptKey + ".ori", bytes);
+				criptedFile = encryptMsg(cryptKey, bytes);
 				fos.write(criptedFile);
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
