@@ -75,6 +75,8 @@ public class MasterImpl implements Master, Serializable {
 			if(!registeredSlaves.containsKey(slavekey)) {
 				registeredSlaves.put(slavekey, 
 						new SlaveInfo(s, slaveName,slavekey));
+			}else {
+				registeredSlaves.get(slavekey).alive = true;
 			}
 		}
 	}
