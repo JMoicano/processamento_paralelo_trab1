@@ -24,7 +24,7 @@ public class MasterImpl implements Master, Serializable {
 	
 	private Map<UUID, SlaveInfo> registeredSlaves;
 	private List<Guess> guesses;
-	private static final int dict_size = 1;//80368;
+	private static final int dict_size = 80368;
 	private int penddingSubAttackNum;
 	private int currentAttack;
 	private Object waiter;
@@ -36,7 +36,7 @@ public class MasterImpl implements Master, Serializable {
 		byte[] knownWord;
 		Timer timer;
 		
-		public AttackInfo(long indexNow, long indexEnd, int attackNumber, byte[] cypherText, byte[] knownWord, Timer timer) {
+		public AttackInfo(long indexNow, long indexEnd, byte[] cypherText, byte[] knownWord, Timer timer) {
 			this.indexNow = indexNow;
 			this.indexEnd = indexEnd;
 			this.cypherText = cypherText;
@@ -71,7 +71,7 @@ public class MasterImpl implements Master, Serializable {
 	@Override
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
-			System.out.println("addSlave request " + slaveName);
+			System.out.println("Slave " + slaveName + " added");
 			//System.out.println(s);
 			registeredSlaves.put(slavekey, 
 					new SlaveInfo(s, slaveName,slavekey));
@@ -82,9 +82,9 @@ public class MasterImpl implements Master, Serializable {
 	public void removeSlave(UUID slaveKey) throws RemoteException {
 		synchronized (registeredSlaves) {
 			SlaveInfo toBe = registeredSlaves.remove(slaveKey);
-			System.out.println("removeSlave " + slaveKey);
+			System.out.println("Removing Slave " + slaveKey);
 			Random generator = new Random();
-			SlaveInfo[] values = (SlaveInfo[]) registeredSlaves.values().toArray();
+			SlaveInfo[] values = registeredSlaves.values().toArray(new SlaveInfo[0]);
 			SlaveInfo randomSlave = values[generator.nextInt(values.length)];
 			toBe.attacks.forEach((a, i)-> requestAttack(randomSlave, i.cypherText, i.knownWord, i.indexNow, i.indexEnd, a));
 			penddingSubAttackNum--;
@@ -103,20 +103,30 @@ public class MasterImpl implements Master, Serializable {
 		synchronized (guesses) {
 			guesses.add(currentguess);
 		}
-		System.out.println("Escravo: " + i.name + " | Indice Atual: " + currentindex + " | " + new String(currentguess.getKey()));
+		System.out.println("Found Gues:\n\t-> Slave: " + i.name + " | Current Index: " + currentindex + " | Candidate key: " + new String(currentguess.getKey()));
 		checkpoint(slaveKey, attackNumber, currentindex);		
 	}
 
 	@Override
 	public void checkpoint(UUID slaveKey, int attackNumber, long currentindex) throws RemoteException {
 		synchronized (registeredSlaves) {
+			try {
 			SlaveInfo i = registeredSlaves.get(slaveKey);
+			System.out.println("Checkpoint:\n\t-> Slave: " + i.name + " | Current Index: " + currentindex);
 			i.alive = true;
 			AttackInfo ai = i.attacks.get(attackNumber);
 			ai.indexNow = currentindex;
-			if(!(ai.indexEnd > currentindex)) {
+			if(!(currentindex < ai.indexEnd)) {
 				ai.timer.cancel();
-				--penddingSubAttackNum;
+				if(--penddingSubAttackNum <= 0) {
+					synchronized (waiter) {
+						waiter.notify();						
+					}
+				}
+			}
+			}catch (Exception e) {
+				System.out.println("Checkpoint Exception: " + e.toString());
+				e.printStackTrace();
 			}
 		}
 	}
@@ -131,13 +141,14 @@ public class MasterImpl implements Master, Serializable {
 
 		@Override
 		public void run() {
+			System.out.println(" Checking slave " + registeredSlaves.get(key).name + ":");
 			if(registeredSlaves.get(key).alive) {
+				System.out.println("\t->Alive");
 				registeredSlaves.get(key).alive = false;
 			}else {
+				System.out.println("\t->Dead");
 				try {
-					synchronized (registeredSlaves) {
-						removeSlave(key);	
-					}
+					removeSlave(key);
 				} catch (RemoteException e) {
 					e.printStackTrace();
 				}
@@ -152,9 +163,9 @@ public class MasterImpl implements Master, Serializable {
 		try {
 			Slave s = item.s;
 			k = item.uuid;
-			System.out.println("Slave " + k + "start attack");
+			System.out.println("Slave " + item.name + " started Attack #" + attackNumber);
 			Timer timer = new Timer();
-			item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, attackNumber, ciphertext, knowntext, timer));
+			item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, ciphertext, knowntext, timer));
 			timer.scheduleAtFixedRate(new CheckerTasker(k), 20000, 20000);
 			penddingSubAttackNum++;
 			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
@@ -169,22 +180,28 @@ public class MasterImpl implements Master, Serializable {
 	public Guess[] attack(byte[] ciphertext, byte[] knowntext) throws RemoteException {
 		ArrayList<SlaveInfo> cpy;
 		synchronized (registeredSlaves) {
-			//cpy = new HashMap<UUID, SlaveInfo>(registeredSlaves);
 			cpy = new ArrayList<SlaveInfo>(registeredSlaves.values());
 		}
 		
 		penddingSubAttackNum = 0;
-		int index_size = this.dict_size/cpy.size();
-		System.out.println("size: " +index_size);
+		int index_size = dict_size/cpy.size();
 		int count = 0;
 		int attackNumber = currentAttack++;
+		System.out.println("Attack #" + attackNumber + " started");
 		for (SlaveInfo s : cpy) {
 			requestAttack(s, ciphertext, knowntext, index_size*count, index_size*(count+1) - 1, attackNumber);
 			count++;
 		}
 
-		while(penddingSubAttackNum > 0);
-
+		
+		try {
+			synchronized (waiter) {
+				waiter.wait();				
+			}
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return guesses.toArray(new Guess[0]);
 	}
 	
@@ -192,9 +209,9 @@ public class MasterImpl implements Master, Serializable {
 		try {
 			Master mestre = new MasterImpl();
 			Master mestreref = (Master) UnicastRemoteObject.exportObject(mestre, 2000);
-			Registry registry = LocateRegistry.getRegistry("127.0.0.1"); // opcional: host
+			Registry registry = LocateRegistry.getRegistry(); // opcional: host
 			registry.rebind("mestre", mestreref);
-		    System.err.println("Server ready");
+		    System.err.println("Master online");
 		} catch (Exception e) {
 			System.err.println("Server exception: " + e.toString()); 
 			e.printStackTrace();

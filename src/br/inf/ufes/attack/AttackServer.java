@@ -22,11 +22,12 @@ import br.inf.ufes.ppd.Master;
 
 public class AttackServer {
 	public static void main(String args[]) {
-		String inFilePath = args[0];
-		String knownWord = args[1];
+		String host = args[0];
+		String inFilePath = args[1];
+		String knownWord = args[2];
 		int size = 0;
-		if(args.length == 3) {
-			size = Integer.parseInt(args[2]);
+		if(args.length == 4) {
+			size = Integer.parseInt(args[3]);
 		}
 		
 		File inFile = new File(inFilePath);
@@ -70,7 +71,7 @@ public class AttackServer {
 		Registry registry;
 		
 		try {
-			registry = LocateRegistry.getRegistry();
+			registry = LocateRegistry.getRegistry(host);
 			Master mestre = (Master) registry.lookup("mestre");
 			
 			Guess[] guesses = mestre.attack(criptedFile, knownWord.getBytes());

@@ -13,12 +13,16 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.RemoteObject;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 
 import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
@@ -104,9 +108,8 @@ public class SlaveImpl implements Slave, Serializable {
 
 		public void run() {
 			try {
-				s.mestre.checkpoint(s.getUuid(), attackNumber, s.initialindex);
+				s.mestre.checkpoint(s.uuid, attackNumber, s.initialindex);
 			} catch (RemoteException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
@@ -127,8 +130,7 @@ public class SlaveImpl implements Slave, Serializable {
 				mestre = (Master) registry.lookup("mestre");
 
 				mestre.addSlave(s, name, uuid);
-				System.out.println("Slave uuid: " + uuid);
-				
+				s.mestre = mestre;
 			} catch (RemoteException | NotBoundException e) {
 				System.out.println("Mestre nao encontrado");
 			}
@@ -136,51 +138,70 @@ public class SlaveImpl implements Slave, Serializable {
 
 	}
 	
+	
+	
+	private class AttackThread extends Thread{
+		byte[] ciphertext;
+		byte[] knowntext;
+		int attackNumber;
+		SlaveManager callbackinterface;
+		Timer timer;
+		
+		public AttackThread (byte[] ciphertext, byte[] knowntext,
+			int attackNumber, SlaveManager callbackinterface, Timer timer) {
+			this.ciphertext = ciphertext;
+			this.knowntext = knowntext;
+			this.attackNumber = attackNumber;
+			this.callbackinterface = callbackinterface;
+			this.timer = timer;
+		}
+		public void run() {
+			long aux;
+			while (initialindex <= finalindex) {
+				aux = initialindex++;				
+			
+				String known_text = new String(knowntext);
+				byte[] key = _dict.get((int)aux).getBytes();
+				try {
+					SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
+		
+					Cipher cipher = Cipher.getInstance("Blowfish");
+					cipher.init(Cipher.DECRYPT_MODE, keySpec);
+		
+					byte[] message = ciphertext;
+		
+					byte[] decrypted = cipher.doFinal(message);
+					String decryptedStr = new String(decrypted);
+					if (decryptedStr.contains(known_text)) {
+						Guess g = new Guess();
+						g.setKey(new String(key));
+						g.setMessage(decrypted);
+						callbackinterface.foundGuess(uuid, attackNumber, initialindex, g);
+					}
+				} catch (javax.crypto.BadPaddingException | InvalidKeyException | IllegalBlockSizeException | NoSuchAlgorithmException | NoSuchPaddingException | RemoteException e) { }
+				
+				
+			}
+			try {
+				System.out.println("Subattack ended");
+				mestre.checkpoint(uuid, attackNumber, initialindex);
+				timer.cancel();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
 	@Override
 	public void startSubAttack(byte[] ciphertext, byte[] knowntext, long initialwordindex, long finalwordindex,
 			int attackNumber, SlaveManager callbackinterface) throws RemoteException {
-		try {
 		this.initialindex = initialwordindex;
 		this.finalindex = finalwordindex;
 
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new CheckpointTask(this, attackNumber), 10000, 10000);
+		new AttackThread(ciphertext, knowntext, attackNumber, callbackinterface, timer).start();
 		
-		long aux;
-		while (this.initialindex <= this.finalindex) {
-			aux = this.initialindex++;				
-
-		
-			String known_text = new String(knowntext).toString();
-			System.out.println(known_text);
-			byte[] key = this._dict.get((int)aux).getBytes();
-			System.out.println(_dict.get((int)aux));
-			try {
-				SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
-	
-				Cipher cipher = Cipher.getInstance("Blowfish");
-				cipher.init(Cipher.DECRYPT_MODE, keySpec);
-	
-				byte[] message = ciphertext;
-	
-				byte[] decrypted = cipher.doFinal(message);
-				String decryptedStr = new String(decrypted);
-				System.out.println();
-				if (decryptedStr.contains(known_text)) {
-					Guess g = new Guess();
-					g.setKey(new String(key));
-					g.setMessage(decrypted);
-					callbackinterface.foundGuess(this.uuid, attackNumber, this.initialindex, g);
-				}
-			} catch (javax.crypto.BadPaddingException e) { }
-			
-			
-		}
-		mestre.checkpoint(uuid, attackNumber, initialindex);
-		timer.cancel();
-		}catch (Exception e) {
-			e.printStackTrace();
-		}
 	}
 			
 
