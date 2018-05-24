@@ -156,6 +156,7 @@ public class SlaveImpl implements Slave, Serializable {
 			this.timer = timer;
 		}
 		public void run() {
+			timer.scheduleAtFixedRate(new CheckpointTask(SlaveImpl.this, attackNumber), 10000, 10000);
 			long aux;
 			while (initialindex <= finalindex) {
 				aux = initialindex++;				
@@ -183,7 +184,7 @@ public class SlaveImpl implements Slave, Serializable {
 				
 			}
 			try {
-				System.out.println("Subattack ended");
+				System.out.println("Slave " + name + " ended subattack #" + attackNumber);
 				mestre.checkpoint(uuid, attackNumber, initialindex);
 				timer.cancel();
 			} catch (RemoteException e) {
@@ -199,8 +200,9 @@ public class SlaveImpl implements Slave, Serializable {
 		this.finalindex = finalwordindex;
 
 		Timer timer = new Timer();
-		timer.scheduleAtFixedRate(new CheckpointTask(this, attackNumber), 10000, 10000);
+		
 		new AttackThread(ciphertext, knowntext, attackNumber, callbackinterface, timer).start();
+		
 		
 	}
 			

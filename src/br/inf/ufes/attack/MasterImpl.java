@@ -72,7 +72,6 @@ public class MasterImpl implements Master, Serializable {
 	public void addSlave(Slave s, String slaveName, UUID slavekey) throws RemoteException {
 		synchronized (registeredSlaves) {
 			System.out.println("Slave " + slaveName + " added");
-			//System.out.println(s);
 			registeredSlaves.put(slavekey, 
 					new SlaveInfo(s, slaveName,slavekey));
 		}
@@ -86,7 +85,10 @@ public class MasterImpl implements Master, Serializable {
 			Random generator = new Random();
 			SlaveInfo[] values = registeredSlaves.values().toArray(new SlaveInfo[0]);
 			SlaveInfo randomSlave = values[generator.nextInt(values.length)];
-			toBe.attacks.forEach((a, i)-> requestAttack(randomSlave, i.cypherText, i.knownWord, i.indexNow, i.indexEnd, a));
+			toBe.attacks.forEach((a, i)-> {
+				requestAttack(randomSlave, i.cypherText, i.knownWord, i.indexNow, i.indexEnd, a);
+				i.timer.cancel();
+			});
 			penddingSubAttackNum--;
 		}
 	}
@@ -109,26 +111,33 @@ public class MasterImpl implements Master, Serializable {
 
 	@Override
 	public void checkpoint(UUID slaveKey, int attackNumber, long currentindex) throws RemoteException {
+
+		AttackInfo ai;
+		SlaveInfo i;
 		synchronized (registeredSlaves) {
-			try {
-			SlaveInfo i = registeredSlaves.get(slaveKey);
-			System.out.println("Checkpoint:\n\t-> Slave: " + i.name + " | Current Index: " + currentindex);
-			i.alive = true;
-			AttackInfo ai = i.attacks.get(attackNumber);
+			i = registeredSlaves.get(slaveKey);
+		}
+		System.out.println("Checkpoint:\n\t-> Slave: " + i.name + " | Current Index: " + currentindex);
+		i.alive = true;
+
+		ai = i.attacks.get(attackNumber);
+		if(ai != null) {
 			ai.indexNow = currentindex;
+	
 			if(!(currentindex < ai.indexEnd)) {
+				--penddingSubAttackNum;
 				ai.timer.cancel();
-				if(--penddingSubAttackNum <= 0) {
-					synchronized (waiter) {
-						waiter.notify();						
-					}
-				}
+				
 			}
-			}catch (Exception e) {
-				System.out.println("Checkpoint Exception: " + e.toString());
-				e.printStackTrace();
+		}else {
+			--penddingSubAttackNum;
+		}
+		if(penddingSubAttackNum <= 0) {
+			synchronized (waiter) {
+				waiter.notify();						
 			}
 		}
+		
 	}
 
 	private class CheckerTasker extends TimerTask{
@@ -165,7 +174,9 @@ public class MasterImpl implements Master, Serializable {
 			k = item.uuid;
 			System.out.println("Slave " + item.name + " started Attack #" + attackNumber);
 			Timer timer = new Timer();
-			item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, ciphertext, knowntext, timer));
+			synchronized (item.attacks) {
+				item.attacks.put(attackNumber, new AttackInfo(initialwordindex, finalwordindex, ciphertext, knowntext, timer));				
+			}
 			timer.scheduleAtFixedRate(new CheckerTasker(k), 20000, 20000);
 			penddingSubAttackNum++;
 			s.startSubAttack(ciphertext, knowntext, initialwordindex, finalwordindex, attackNumber, this);
