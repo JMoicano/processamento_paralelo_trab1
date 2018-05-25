@@ -135,7 +135,7 @@ public class SlaveImpl implements Slave, Serializable {
 				mestre = (Master) registry.lookup("mestre");
 				mestre.addSlave(s, name, uuid);
 			} catch (RemoteException | NotBoundException e) {
-				System.out.println("Mestre nao encontrado");
+				e.printStackTrace();
 			}
 		}
 
@@ -174,15 +174,15 @@ public class SlaveImpl implements Slave, Serializable {
 		
 					byte[] message = ciphertext;
 		
-					byte[] decrypted = cipher.doFinal(message);
-					String decryptedStr = new String(decrypted);
-					if (decryptedStr.contains(known_text)) {
-						Guess g = new Guess();
-						g.setKey(new String(key));
-						g.setMessage(decrypted);
-						callbackinterface.foundGuess(uuid, attackNumber, initialindex, g);
-					}
-				} catch (javax.crypto.BadPaddingException | InvalidKeyException | IllegalBlockSizeException | NoSuchAlgorithmException | NoSuchPaddingException | RemoteException e) { }
+//					byte[] decrypted = cipher.doFinal(message);
+//					String decryptedStr = new String(decrypted);
+//					if (decryptedStr.contains(known_text)) {
+//						Guess g = new Guess();
+//						g.setKey(new String(key));
+//						g.setMessage(decrypted);
+//						callbackinterface.foundGuess(uuid, attackNumber, initialindex, g);
+//					}
+				} catch (InvalidKeyException | NoSuchAlgorithmException | NoSuchPaddingException e) { }
 				
 				
 			}
