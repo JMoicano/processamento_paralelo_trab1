@@ -13,6 +13,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.RemoteObject;
+import java.rmi.server.UnicastRemoteObject;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -116,21 +117,23 @@ public class SlaveImpl implements Slave, Serializable {
 	}
 
 	private class RegisterTask extends TimerTask{
-		SlaveImpl s;
+		Slave s;
 	
 		
-		public RegisterTask(SlaveImpl s) {
+		public RegisterTask(Slave s) {
 			super();
-			this.s = s;
+			try {
+				this.s = (Slave) UnicastRemoteObject.exportObject(s, 0);
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
 		}
 
 		public void run() {
 			try {
 				Registry registry = LocateRegistry.getRegistry(hostname);
 				mestre = (Master) registry.lookup("mestre");
-
 				mestre.addSlave(s, name, uuid);
-				s.mestre = mestre;
 			} catch (RemoteException | NotBoundException e) {
 				System.out.println("Mestre nao encontrado");
 			}
