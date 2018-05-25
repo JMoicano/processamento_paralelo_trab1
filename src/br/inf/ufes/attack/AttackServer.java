@@ -64,15 +64,15 @@ public class AttackServer {
 			try (FileOutputStream fos = new FileOutputStream(inFile)){
 				new Random().nextBytes(bytes);
 				ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
-				for(byte b : knownWord.getBytes()) {
-					System.out.println(b);
-				}
+//				for(byte b : knownWord.getBytes()) {
+//					System.out.println(b);
+//				}
 				outputStream.write(knownWord.getBytes());
 				outputStream.write(bytes);
-				System.out.println(knownWord.getBytes());
-				
+//				System.out.println(knownWord.getBytes());
+//				
 				bytes = outputStream.toByteArray();
-				System.out.println(bytes);
+//				System.out.println(bytes);
 				if (cryptKey == null) cryptKey = "madman";
 				saveFile("./" + cryptKey + ".ori", bytes);
 				criptedFile = encryptMsg(cryptKey, bytes);
@@ -94,8 +94,10 @@ public class AttackServer {
 		try {
 			registry = LocateRegistry.getRegistry(host);
 			Master mestre = (Master) registry.lookup("mestre");
-			
+			long startTime = System.nanoTime();
 			Guess[] guesses = mestre.attack(criptedFile, knownWord.getBytes());
+			double time_diff = (System.nanoTime() - startTime)/1000000;
+			System.out.println(time_diff);
 			for(Guess g : guesses) {
 				saveFile(g.getKey() + ".msg", g.getMessage());
 			}
@@ -123,7 +125,7 @@ public class AttackServer {
 			Cipher cipher = Cipher.getInstance("Blowfish");
 			cipher.init(Cipher.ENCRYPT_MODE, keySpec);
 
-			System.out.println("message size (bytes) = "+message.length);
+			//System.out.println("message size (bytes) = "+message.length);
 
 			byte[] encrypted = cipher.doFinal(message);
 
