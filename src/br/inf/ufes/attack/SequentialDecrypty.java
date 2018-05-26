@@ -20,25 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 public class SequentialDecrypty {
 
-	private static byte[] readFile(String filename) throws IOException {
-
-		File file = new File(filename);
-		InputStream is = new FileInputStream(file);
-		long length = file.length();
-
-		  //creates array (assumes file length<Integer.MAX_VALUE)
-		byte[] data = new byte[(int)length];
-
-		int offset = 0;
-		int count = 0;
-
-		while((offset < data.length) && (count = is.read(data, offset, data.length-offset)) >= 0 ){
-			offset += count;
-		}
-		is.close();
-		return data;
-	}
-
+	//Save a byte array into file
 	private static void saveFile(String filename, byte[] data) throws IOException {
 
 		FileOutputStream out = new FileOutputStream(filename);
@@ -49,13 +31,15 @@ public class SequentialDecrypty {
 
 
 	public static void main(String[] args) {
-		// args[0] arquivo dicionario
-		// args[1] e o nome do arquivo de entrada
-		// args[2] texto conhecido
+		// args[0] path to dictionary file
+		// args[1] path to in file
+		// args[2] known word
 		File f = new File(args[0]);
 		File inFile = new File(args[1]);
 		String known_text = args[2];
-		List<String> _dict = null;
+		List<String> _dict = null; //dictionary
+		
+		//Read the dictionary
 		try(FileReader fileReader = new FileReader(f);
 			BufferedReader b = new BufferedReader(fileReader)) {
 			_dict = new ArrayList<String>();
@@ -70,14 +54,17 @@ public class SequentialDecrypty {
 		byte[] ciphertext = null;
 		
 		try {
+			//read encrypted file
 			ciphertext = Files.readAllBytes(inFile.toPath());
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
-		long startTime = System.nanoTime();		
+		long startTime = System.nanoTime();
+		//for each word in dictionary
 		for (int aux = 0; aux < _dict.size(); ++aux) {
 		
 			byte[] key = _dict.get((int)aux).getBytes();
+			//try to decrypti with that word
 			try {
 				SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
 	
@@ -98,29 +85,5 @@ public class SequentialDecrypty {
 		double time_diff = (System.nanoTime() - startTime)/1000000;
 		System.out.println(time_diff);
 
-		try {
-
-			byte[] key = args[0].getBytes();
-			SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
-
-			Cipher cipher = Cipher.getInstance("Blowfish");
-			cipher.init(Cipher.DECRYPT_MODE, keySpec);
-
-			byte[] message = readFile(args[1]);
-			System.out.println("message size (bytes) = "+ message.length);
-
-			byte[] decrypted = cipher.doFinal(message);
-
-			
-
-		} catch (javax.crypto.BadPaddingException e) {
-			// essa excecao e jogada quando a senha esta incorreta
-			// porem nao quer dizer que a senha esta correta se nao jogar essa excecao
-			System.out.println("Senha invalida.");
-
-		} catch (Exception e) {
-			//dont try this at home
-			e.printStackTrace();
-		}
 	}
 }

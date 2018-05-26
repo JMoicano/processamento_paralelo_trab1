@@ -23,24 +23,25 @@ import javax.crypto.spec.SecretKeySpec;
 import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 
-public class AttackServer {
+public class AttackClient {
 	public static void main(String args[]) {
-		String host = args[0];
-		String dicPath = args[1];
-		String inFilePath = args[2];
-		String knownWord = args[3];
+		String host = args[0]; //adress to master host
+		String dicPath = args[1]; //path to dctionary
+		String inFilePath = args[2]; //path to encrypted file
+		String knownWord = args[3]; //know word in the file
 		ArrayList<String> _dict;
 		String cryptKey = null;
 		int size = 0;
 		if(args.length == 5) {
-			size = Integer.parseInt(args[4]);
+			size = Integer.parseInt(args[4]); //size in bytes of the encrypted file
 		} 
 			
 		File inFile = new File(inFilePath);
 		byte[] bytes;
 
 		File f = new File(dicPath);
-		 
+		
+		//Load dictionary
 		try(FileReader fileReader = new FileReader(f);
 			BufferedReader b = new BufferedReader(fileReader)) {
 			_dict = new ArrayList<String>();
@@ -54,25 +55,25 @@ public class AttackServer {
 		}
 		
 		byte[] criptedFile = null;
+		
+		//if encrypted file doesn't exists, generate a random one 
 		if(!inFile.exists()) {
 			if(size == 0) {
 				Random r = new Random();
+				//random size between 1000 and 100000
 				size = r.nextInt(99000) + 1000 - knownWord.length();
 			}
 			
 			bytes = new byte[size];
 			try (FileOutputStream fos = new FileOutputStream(inFile)){
 				new Random().nextBytes(bytes);
+				
+				//Concatenate generated file with known word
 				ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
-//				for(byte b : knownWord.getBytes()) {
-//					System.out.println(b);
-//				}
 				outputStream.write(knownWord.getBytes());
 				outputStream.write(bytes);
-//				System.out.println(knownWord.getBytes());
-//				
+
 				bytes = outputStream.toByteArray();
-//				System.out.println(bytes);
 				if (cryptKey == null) cryptKey = "madman";
 				saveFile("./" + cryptKey + ".ori", bytes);
 				criptedFile = encryptMsg(cryptKey, bytes);
@@ -102,13 +103,13 @@ public class AttackServer {
 				saveFile(g.getKey() + ".msg", g.getMessage());
 			}
 		} catch (NotBoundException | IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
 		
 	}
 	
+	//Save a byte array into a file
 	private static void saveFile(String filename, byte[] data) throws IOException {
 
 		FileOutputStream out = new FileOutputStream(filename);
@@ -117,6 +118,7 @@ public class AttackServer {
 
 	}
 	
+	//encrypt a message (to use when generating a random file
 	private static byte[] encryptMsg(String k, byte[] message) {
 		try {
 			byte[] key = k.getBytes();
@@ -132,7 +134,6 @@ public class AttackServer {
 			return encrypted;
 
 		} catch (Exception e) {
-			// don't try this at home
 			e.printStackTrace();
 		}
 		return message;

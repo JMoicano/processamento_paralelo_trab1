@@ -32,27 +32,22 @@ import br.inf.ufes.ppd.SlaveManager;
 
 public class SlaveImpl implements Slave, Serializable {
 
-	private Master mestre;
-	private UUID uuid;
-	private long initialindex;
-	private long finalindex;
-	private ArrayList<String> _dict;
-	private String hostname;
-	private String name;
+	private Master mestre; //reference to master
+	private UUID uuid; //uuid key
+	private long initialindex; //initial index to attack
+	private long finalindex; //final index to attack
+	private ArrayList<String> _dict; //dictionary words
+	private String hostname; //address to masters host
+	private String name; //name of the slave
 	
-	public void printDict() {
-		for(int i = 0; i < this._dict.size(); i++) System.out.println("[" + i + "] " + this._dict.get(i));
-	}
-
 	public SlaveImpl(String host, String dicPath, String name) {
 		this.hostname = host;
 		this.name = name;
 		uuid = UUID.randomUUID();
-		this.initialindex = -1;
-		this.finalindex = -1;
 
 		File f = new File(dicPath);
 		 
+		//Initialize dictionary
 		try(FileReader fileReader = new FileReader(f);
 			BufferedReader b = new BufferedReader(fileReader)) {
 			this._dict = new ArrayList<String>();
@@ -64,6 +59,7 @@ public class SlaveImpl implements Slave, Serializable {
 			e.printStackTrace();
 		}
 
+		//Start a timer task to register in master every 30 seconds
 		Timer timer = new Timer();
 		timer.scheduleAtFixedRate(new RegisterTask(this), 0, 30000);
 				
@@ -71,30 +67,8 @@ public class SlaveImpl implements Slave, Serializable {
 
 	}
 
-	public void setInitialIndex(long i) {
-		this.initialindex = i;
-	}
-
-	public long getInitialIndex() {
-		return this.initialindex;
-	}
-
-	public void setFinalIndex(long i) {
-		this.finalindex = i;
-	}
-
-	public long getFinalIndex() {
-		return this.finalindex;
-	}
 	
-	public int sizeDict() {
-		return this._dict.size();
-	}
-
-	public UUID getUuid() {
-		return uuid;
-	}
-	
+	//Timer task to send master a checkpoint
 	private class CheckpointTask extends TimerTask{
 		SlaveImpl s;
 		int attackNumber;
@@ -116,6 +90,8 @@ public class SlaveImpl implements Slave, Serializable {
 		}
 	}
 
+	
+	//Timer task to register itself into master again
 	private class RegisterTask extends TimerTask{
 		Slave s;
 	
@@ -123,6 +99,7 @@ public class SlaveImpl implements Slave, Serializable {
 		public RegisterTask(Slave s) {
 			super();
 			try {
+				//Saving reference to slave to pass out to master
 				this.s = (Slave) UnicastRemoteObject.exportObject(s, 0);
 			} catch (RemoteException e) {
 				e.printStackTrace();
@@ -131,6 +108,7 @@ public class SlaveImpl implements Slave, Serializable {
 
 		public void run() {
 			try {
+				//Locate master in registry and register to it
 				Registry registry = LocateRegistry.getRegistry(hostname);
 				mestre = (Master) registry.lookup("mestre");
 				mestre.addSlave(s, name, uuid);
@@ -142,13 +120,13 @@ public class SlaveImpl implements Slave, Serializable {
 	}
 	
 	
-	
+	//Thread to run attack non-blocking
 	private class AttackThread extends Thread{
-		byte[] ciphertext;
-		byte[] knowntext;
-		int attackNumber;
-		SlaveManager callbackinterface;
-		Timer timer;
+		byte[] ciphertext;				//
+		byte[] knowntext;				//Nedded information to attack
+		int attackNumber;				//
+		SlaveManager callbackinterface;	//****************************
+		Timer timer;					//Timer to send a checkpoint of attack
 		
 		public AttackThread (byte[] ciphertext, byte[] knowntext,
 			int attackNumber, SlaveManager callbackinterface, Timer timer) {
@@ -166,6 +144,7 @@ public class SlaveImpl implements Slave, Serializable {
 			
 				String known_text = new String(knowntext);
 				byte[] key = _dict.get((int)aux).getBytes();
+				//Try to decrypt at every dictionary word in set indexes 
 				try {
 					SecretKeySpec keySpec = new SecretKeySpec(key, "Blowfish");
 		
@@ -180,6 +159,7 @@ public class SlaveImpl implements Slave, Serializable {
 						Guess g = new Guess();
 						g.setKey(new String(key));
 						g.setMessage(decrypted);
+						//if a candidate word was found, send a callback to master
 						callbackinterface.foundGuess(uuid, attackNumber, initialindex, g);
 					}
 				} catch (javax.crypto.BadPaddingException | InvalidKeyException | IllegalBlockSizeException | NoSuchAlgorithmException | NoSuchPaddingException | RemoteException e) { }
@@ -188,6 +168,7 @@ public class SlaveImpl implements Slave, Serializable {
 			}
 			try {
 				System.out.println("Slave " + name + " ended subattack #" + attackNumber);
+				//Send the final checkpoint and cancel the checkpoint timer
 				mestre.checkpoint(uuid, attackNumber, initialindex);
 				timer.cancel();
 			} catch (RemoteException e) {
@@ -203,35 +184,16 @@ public class SlaveImpl implements Slave, Serializable {
 		this.finalindex = finalwordindex;
 
 		Timer timer = new Timer();
-		
+		//Just start the attack thread
 		new AttackThread(ciphertext, knowntext, attackNumber, callbackinterface, timer).start();
 		
 		
 	}
 			
 
-	private static byte[] readFile(String filename) throws IOException {
-
-		File file = new File(filename);
-		InputStream is = new FileInputStream(file);
-		long length = file.length();
-
-		//creates array (assumes file length<Integer.MAX_VALUE)
-		byte[] data = new byte[(int)length];
-
-		int offset = 0;
-		int count = 0;
-
-		while((offset < data.length) && (count = is.read(data, offset, data.length-offset)) >= 0 ){
-			offset += count;
-		}
-		is.close();
-		return data;
-	}
-
-
 	public static void main(String[] args) {
 		
+		//Slave cliente to run a slave given the host, path to dictionary and slave name
 		Slave s = new SlaveImpl(args[0], args[1], args[2]);
 
 	}
