@@ -25,6 +25,8 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
+
+
 import br.inf.ufes.ppd.Guess;
 import br.inf.ufes.ppd.Master;
 import br.inf.ufes.ppd.Slave;
@@ -66,7 +68,58 @@ public class SlaveImpl implements Slave, Serializable {
 		
 
 	}
+	private static class KPM {
+	    /**
+	     * Search the data byte array for the first occurrence of the byte array pattern within given boundaries.
+	     * @param data
+	     * @param start First index in data
+	     * @param stop Last index in data so that stop-start = length
+	     * @param pattern What is being searched. '*' can be used as wildcard for "ANY character"
+	     * @return
+	     */
+	    public static int indexOf( byte[] data, int start, int stop, byte[] pattern) {
+	        if( data == null || pattern == null) return -1;
 
+	        int[] failure = computeFailure(pattern);
+
+	        int j = 0;
+
+	        for( int i = start; i < stop; i++) {
+	            while (j > 0 && ( pattern[j] != '*' && pattern[j] != data[i])) {
+	                j = failure[j - 1];
+	            }
+	            if (pattern[j] == '*' || pattern[j] == data[i]) {
+	                j++;
+	            }
+	            if (j == pattern.length) {
+	                return i - pattern.length + 1;
+	            }
+	        }
+	        return -1;
+	    }
+
+	    /**
+	     * Computes the failure function using a boot-strapping process,
+	     * where the pattern is matched against itself.
+	     */
+	    private static int[] computeFailure(byte[] pattern) {
+	        int[] failure = new int[pattern.length];
+
+	        int j = 0;
+	        for (int i = 1; i < pattern.length; i++) {
+	            while (j>0 && pattern[j] != pattern[i]) {
+	                j = failure[j - 1];
+	            }
+	            if (pattern[j] == pattern[i]) {
+	                j++;
+	            }
+	            failure[i] = j;
+	        }
+
+	        return failure;
+	    }
+	}
+	
 	
 	//Timer task to send master a checkpoint
 	private class CheckpointTask extends TimerTask{
@@ -142,7 +195,6 @@ public class SlaveImpl implements Slave, Serializable {
 			while (initialindex <= finalindex) {
 				aux = initialindex++;				
 			
-				String known_text = new String(knowntext);
 				byte[] key = _dict.get((int)aux).getBytes();
 				//Try to decrypt at every dictionary word in set indexes 
 				try {
@@ -154,8 +206,9 @@ public class SlaveImpl implements Slave, Serializable {
 					byte[] message = ciphertext;
 		
 					byte[] decrypted = cipher.doFinal(message);
-					String decryptedStr = new String(decrypted);
-					if (decryptedStr.contains(known_text)) {
+					
+					int found = KPM.indexOf(decrypted, 0, decrypted.length, knowntext);
+					if (found > 0) {
 						Guess g = new Guess();
 						g.setKey(new String(key));
 						g.setMessage(decrypted);
